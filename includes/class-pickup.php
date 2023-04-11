@@ -158,8 +158,12 @@ class Pickup {
 		$this->loader->add_action( 'admin_enqueue_scripts', $plugin_admin, 'enqueue_scripts' );
 		$this->loader->add_action('init',$plugin_admin,'add_store_custom_post_type');
 		$this->loader->add_action('add_meta_boxes',$plugin_admin,'add_store_meta_box');
-
-
+		$this->loader->add_action('save_post',$plugin_admin,'save_meta_boxes');
+		$this->loader->add_action('manage_store_posts_column',$plugin_admin,'add_store_list_columns');
+		$this->loader->add_action('manage_store_posts_custom_column', $plugin_admin, 'display_store_list_columns', 10, 2);
+		$this->loader->add_action('woocommerce_email_order_meta',$plugin_admin,'send_confirmation_mail');
+		$this->loader->add_action('woocommerce_checkout_create_order', $plugin_admin, 'save_order');
+		$this->loader->add_action('my_daily_remainder', $plugin_admin, 'send_pickup_reminder_emails');
 	}
 
 	/**
