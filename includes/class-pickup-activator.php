@@ -30,7 +30,11 @@ class Pickup_Activator {
 	 * @since    1.0.0
 	 */
 	public static function activate() {
-
+		$now = time();
+		$scheduled_time = strtotime('23:59:00', $now); 
+		if (!wp_next_scheduled('my_daily_remainder')) {
+			wp_schedule_event($scheduled_time, 'daily', 'my_daily_remainder');
+		}
 	}
 
 }
