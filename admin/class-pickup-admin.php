@@ -141,7 +141,7 @@ class Pickup_Admin {
 		<tbody>
 				<tr>
 					<th><label for="name"><?php _e('Store Name', 'pickup'); ?></label></th>
-					<td><input type="text" id="name" name="store_name" value="<?php echo esc_attr($name); ?>"></td>
+					<td><input type="text" id="name" name="name" value="<?php echo esc_attr($name); ?>"></td>
 				</tr>
 				<tr>
 					<th><label for="address"><?php _e('Address', 'pickup'); ?></label></th>
@@ -155,6 +155,128 @@ class Pickup_Admin {
 			</tbody>
 		</table>
 <?php
+	}
+
+	public function save_meta_boxes($post_id)
+	{
+		if (!isset($_POST['store_information_nonce']) ||
+		 !wp_verify_nonce($_POST['store_information_nonce'], 'store_information')) {
+			return;
+		}
+
+		if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+			return;
+		}
+
+		if (isset($_POST['post_type']) && 'store' == $_POST['post_type']) {
+			if (current_user_can('edit_post', $post_id)) {
+				if (isset($_POST['store_name'])) {
+					update_post_meta($post_id, '_name', sanitize_text_field($_POST['name']));
+				}
+				if (isset($_POST['store_address'])) {
+					update_post_meta($post_id, '_address', sanitize_text_field($_POST['address']));
+				}
+				if (isset($_POST['contact_info'])) {
+					update_post_meta($post_id, '_contact', sanitize_textarea_field($_POST['contact']));
+				}
+			}
+		}
+	}
+
+	public function add_store_list_columns($columns)
+	{
+		$columns['name'] = __('Store Name', 'pickup');
+		$columns['address'] = __('Address', 'pickup');
+		$columns['contact'] = __('Contact', 'pickup');
+		return $columns;
+	}
+
+	public function display_store_list_columns($column, $post_id)
+	{
+		switch ($column) {
+			case 'store_name':
+				echo get_post_meta($post_id, '_name', true);
+				break;
+			case 'store_address':
+				echo get_post_meta($post_id, '_address', true);
+				break;
+			case 'contact_info':
+				echo get_post_meta($post_id, '_contact', true);
+				break;
+		}
+	}
+
+	public function send_confirmation_mail(){
+		if(isset($_POST['pickup_date']) && !empty($_POST['pickup_date'])){
+			$pickup_date = sanitize_text_field($_POST['pickup_date']);
+		}
+
+		if(isset($_POST['store_options']) && !empty($_POST['store_options'])) {
+			$selected_store = sanitize_text_field($_POST['store_options']);
+		}
+
+		$mail = '<h3>Store Pickup Details</h3>';
+		$date = date('d-m-y', strtotime($pickup_date));
+		$mail .= "Pickup Date: $date".'<br>';
+		$mail .= "selected store : $selected_store".'<br>';
+		return $mail;
+	}
+
+	public function save_order($order){
+		if (isset($_POST['pickup_date']) && isset($_POST['store_options'])) {
+			
+			$pickup_date = sanitize_text_field($_POST['pickup_date']);
+			$selected_store = sanitize_text_field($_POST['store_options']);
+			$order->update_meta_data( 'pickup_id', $pickup_date );
+			$order->update_meta_data( 'store_id', $selected_store );
+	
+		}	
+	}
+
+	public function send_pickup_reminder_emails() {
+		$args = array(
+			'post_type' => 'shop_order',
+			'posts_per_page' => '-1',
+			'post_status' => 'any'
+		  );
+	  
+		$query = new WP_Query($args);
+		$posts = $query->posts;
+
+		// Calculate next day
+		$next_day = strtotime( '+1 day', current_time( 'timestamp' ) );
+		//$next_day_date = date( 'Y-m-d', $next_day );
+	
+		foreach ( $posts as $post ) {
+			$order_id = $post->ID;
+			$this->send_pickup_reminder_email($order_id);
+		}
+	}
+
+	//To send remainder mail
+	public function send_pickup_reminder_email($order_id) {
+		$order = wc_get_order( $order_id );
+		$pickup_date = $order->get_meta('pickup_id');
+		$selected_store = $order->get_meta('store_id');
+		$customer_email = $order->get_billing_email();
+		
+		// Check if pickup date is exactly one day away from today
+		$pickup_timestamp = strtotime($pickup_date);
+		$one_day_before_pickup_timestamp = strtotime('-1 day', $pickup_timestamp);
+		if (date('Y-m-d', $one_day_before_pickup_timestamp) === date('Y-m-d')) {
+			// Send reminder email
+			$subject = 'Reminder: Store Pickup Tomorrow';
+			$message = "<p>Dear customer,</p>";
+			$message .= "<p>This is a reminder that your order is ready for pickup and 
+			you have a store pickup scheduled for tomorrow at the following location:</p>";
+			$message .= "<p>Selected Store: $selected_store</p>";
+			$date = date('d-m-Y', strtotime($pickup_date));
+			$message .= "<p>Pickup Date: $date</p>";
+			$message .= "<p>Thank you for choosing our store. We look forward to seeing you again.</p>";
+			$headers = array('Content-Type: text/html; charset=UTF-8');
+			wp_mail($customer_email, $subject, $message, $headers);
+		}
+
 	}
 
 }
